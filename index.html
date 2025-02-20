@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Device-Dependent Wave Settings</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    canvas { display: block; }
+    #center-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: rgb(171, 111, 222);
+      font-size: 48px;
+      font-family: Arial, sans-serif;
+      pointer-events: none;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="center-text">Memorable Purple</div>
+  <script>
+    const canvas = document.getElementById('canvas');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const gl = canvas.getContext('webgl');
+    if (!gl) { alert('WebGL을 지원하지 않는 브라우저입니다.'); }
+    
+    // Vertex shader에 u_waveFrequency와 u_waveAmplitude 유니폼 추가
+    const vertexShaderSource = `
+      attribute vec2 a_position;
+      uniform float u_time;
+      uniform vec2 u_mouse;
+      uniform vec2 u_groupOffset;
+      uniform float u_waveFrequency;
+      uniform float u_waveAmplitude;
+
+      const float a = 0.6;  // 타원의 x 반지름
+      const float b = 0.4;  // 타원의 y 반지름
+      const float noiseStrength = 0.02;
+
+      float noise(float x, float y) {
+          return fract(sin(dot(vec2(x, y), vec2(12.9898, 78.233))) * 43758.5453);
+      }
+
+      void main() {
+          float angle = a_position.x + u_time * 0.001;
+          vec2 pos;
+          pos.x = a * cos(angle);
+          pos.y = b * sin(angle) + sin(angle * u_waveFrequency + u_time * 0.005) * u_waveAmplitude;
+          pos.y += (noise(angle, u_time * 0.002) - 0.5) * noiseStrength;
+          pos += u_groupOffset;
+
+          gl_PointSize = 2.0;
+          gl_Position = vec4(pos, 0.0, 1.0);
+      }
+    `;
+
+    // Fragment shader: 동일한 보라색 사용
+    const fragmentShaderSource = `
+      precision mediump float;
+      void main() {
+          gl_FragColor = vec4(0.671, 0.435, 0.871, 1.0);
+      }
+    `;
+
+    function createShader(gl, type, source) {
+      const shader = gl.createShader(type);
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+          console.error('셰이더 컴파일 오류:', gl.getShaderInfoLog(shader));
+          gl.deleteShader(shader);
+          return null;
+      }
+      return shader;
+    }
+
+    const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+    const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
+    const program = gl.createProgram();
+    gl.attachShader(program, vertexShader);
+    gl.attachShader(program, fragmentShader);
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        console.error('프로그램 링크 오류:', gl.getProgramInfoLog(program));
+    }
+    gl.useProgram(program);
+
+    // 파티클 데이터 생성 (각도 값 분포)
+    const particleCount = 1000;
+    const positions = new Float32Array(particleCount * 2);
+    for (let i = 0; i < particleCount; i++) {
+      positions[i * 2] = i * (Math.PI * 2 / particleCount);
+      positions[i * 2 + 1] = 0.0;
+    }
+    const positionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+
+    const aPosition = gl.getAttribLocation(program, 'a_position');
+    gl.enableVertexAttribArray(aPosition);
+    gl.vertexAttribPointer(aPosition, 2, gl.FLOAT, false, 0, 0);
+
+    // 유니폼 변수들
+    const uTime = gl.getUniformLocation(program, 'u_time');
+    const uMouse = gl.getUniformLocation(program, 'u_mouse');
+    const uGroupOffset = gl.getUniformLocation(program, 'u_groupOffset');
+    const uWaveFrequency = gl.getUniformLocation(program, 'u_waveFrequency');
+    const uWaveAmplitude = gl.getUniformLocation(program, 'u_waveAmplitude');
+
+    // 마우스 좌표 (0~1 사이 정규화)
+    const mouse = { x: 0.5, y: 0.5 };
+    canvas.addEventListener('mousemove', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      mouse.x = (e.clientX - rect.left) / canvas.width;
+      mouse.y = (e.clientY - rect.top) / canvas.height;
+    });
+
+    // 파티클 그룹 오프셋 배열
+    const groups = [
+      [0.0, 0.0],
+      [0.3, 0.1],
+      [-0.3, -0.1],
+      [0.15, -0.2]
+    ];
+
+    // 모바일 여부 감지 (간단한 userAgent 체크)
+    const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+
+    let time = 0;
+    function render() {
+      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.clearColor(0.0, 0.0, 0.0, 1.0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+
+      time += 1.0;
+      gl.uniform1f(uTime, time);
+      gl.uniform2f(uMouse, mouse.x, mouse.y);
+
+      // 마우스 x 좌표를 이용해 웨이브 파라미터를 동적으로 계산
+      let waveFrequency, waveAmplitude;
+      if (isMobile) {
+          // 모바일에서는 웨이브의 복잡도를 낮춤
+          waveFrequency = 5.0 + 5.0 * mouse.x; // 주파수 범위를 낮춤
+          waveAmplitude = 0.05 + 0.05 * mouse.x; // 진폭을 낮춤
+      } else {
+          // 데스크톱에서는 보다 복잡한 웨이브 효과 적용
+          waveFrequency = 5.0 + 15.0 * mouse.x;
+          waveAmplitude = 0.05 + 0.1 * mouse.x;
+      }
+      gl.uniform1f(uWaveFrequency, waveFrequency);
+      gl.uniform1f(uWaveAmplitude, waveAmplitude);
+
+      // 각 그룹별 오프셋을 적용하며 파티클 그리기
+      for (let i = 0; i < groups.length; i++) {
+          gl.uniform2f(uGroupOffset, groups[i][0], groups[i][1]);
+          gl.drawArrays(gl.POINTS, 0, particleCount);
+      }
+      requestAnimationFrame(render);
+    }
+    render();
+
+    window.addEventListener('resize', () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      gl.viewport(0, 0, canvas.width, canvas.height);
+    });
+  </script>
+</body>
+</html>
