@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Device-Dependent Wave Settings</title>
+  <title>Memorable Purple.</title>
   <style>
     body { margin: 0; overflow: hidden; }
     canvas { display: block; }
@@ -13,7 +13,7 @@
       left: 50%;
       transform: translate(-50%, -50%);
       color: rgb(171, 111, 222);
-      font-size: 48px;
+      font-size: 2em;
       font-family: Arial, sans-serif;
       pointer-events: none;
       text-align: center;
@@ -22,7 +22,7 @@
 </head>
 <body>
   <canvas id="canvas"></canvas>
-  <div id="center-text">Memorable Purple</div>
+  <div id="center-text"><p>Memorable Purple</p><p>RGB(171,111,222)</p></div>
   <script>
     const canvas = document.getElementById('canvas');
     canvas.width = window.innerWidth;
@@ -92,7 +92,7 @@
     gl.useProgram(program);
 
     // 파티클 데이터 생성 (각도 값 분포)
-    const particleCount = 1000;
+    const particleCount = 350;
     const positions = new Float32Array(particleCount * 2);
     for (let i = 0; i < particleCount; i++) {
       positions[i * 2] = i * (Math.PI * 2 / particleCount);
@@ -124,9 +124,9 @@
     // 파티클 그룹 오프셋 배열
     const groups = [
       [0.0, 0.0],
-      [0.3, 0.1],
-      [-0.3, -0.1],
-      [0.15, -0.2]
+      [0.3, 0.13],
+      [-0.171, -0.111],
+      [0.15, -0.222]
     ];
 
     // 모바일 여부 감지 (간단한 userAgent 체크)
